@@ -2,6 +2,8 @@ package ui
 
 import (
     "github.com/jroimartin/gocui"
+    "fmt"
+    "crontab-tui/parser"
 )
 
 type DescriptionPanel struct {
@@ -30,5 +32,15 @@ func (descriptionPanel *DescriptionPanel) DrawView(g *gocui.Gui) error {
         v.SelBgColor = gocui.ColorGreen
         v.Title = " Description "
     }
+    return nil
+}
+
+func (descriptionPanel *DescriptionPanel) DrawText(g *gocui.Gui, item *parser.CronJob) error {
+    v, err := g.View(descriptionPanel.ViewName)
+    if err != nil {
+        return err
+    }
+    v.Clear()
+    fmt.Fprintf(v, item.Description)
     return nil
 }
