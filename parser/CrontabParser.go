@@ -192,24 +192,54 @@ func DescribeSchedule(fields []string) string {
         return ""
     }
     minute, hour, dom, mon, dow := fields[0], fields[1], fields[2], fields[3], fields[4]
-    desc := fmt.Sprintf("At minute %s, hour %s, day-of-month %s, month %s, day-of-week %s",
-        minute, hour, dom, mon, dow)
-    if minute == "0" && hour == "*" && dom == "*" && mon == "*" && dow == "*" {
-        return "Every hour at minute 0"
-    }
-    if strings.HasPrefix(minute, "*/") && hour == "*" && dom == "*" {
+    //desc := fmt.Sprintf("At minute %s, hour %s, day-of-month %s, month %s, day-of-week %s",
+    //    minute, hour, dom, mon, dow)
+    if strings.HasPrefix(minute, "*/") && hour == "*" && dom == "*" && mon == "*" && dow == "*" {
         return fmt.Sprintf("Every %s minutes", minute[2:])
+    }
+    if hour == "*" && dom == "*" && mon == "*" && dow == "*" && minute != "*" {
+        return fmt.Sprintf("Every hour at :%s", minute)
     }
     if minute == "0" && hour == "0" && dom == "*" {
         return "Every day at midnight"
     }
-    if dom == "*" && mon == "*" && dow == "1" && minute == "0" && hour == "0" {
-        return "Every Monday at midnight"
+    if dom == "*" && mon == "*" && dow == "*" && minute != "0" && hour != "*" {
+        return fmt.Sprintf("Every day at %s", formatTime(hour, minute))
     }
-    return desc
+
+    if dom == "1-5" && minute == "0" && hour == "0" && dom == "*" && mon == "*" {
+        return "Every weekday at midnight"
+    }
+
+    if dow != "*" && dom == "*" && mon == "*" {
+        return fmt.Sprintf("Every %s at %s", describeWeekdayList(dow), formatTime(hour, minute))
+    }
+
+    parts := []string{}
+    
+    t := describeTime(hour, minute)
+    if t != "" {parts = append(parts, t)}
+
+    if dom != "*" {
+        parts = append(parts, " on the " + describeOrdinalList(dom))
+    }
+
+    if mon != "*" {
+        parts = append(parts, " in " + describeMonthList(mon))
+    }
+    
+    if dow != "*" {
+        parts = append(parts, " on " + describeWeekdayList(dow))
+    }
+
+    if len(parts) == 0 {
+        return "Run every minute"
+    }
+
+    return strings.Join(parts, " ")
 }
 
-func (result *Result) Draw(writer io.Writer) error {
+func (result *Result) Draw(writer io.Writer) error { 
     if result == nil || writer == nil {
         return nil
     }
@@ -222,4 +252,174 @@ func (result *Result) Draw(writer io.Writer) error {
         fmt.Fprintf(writer, "%-20s %s\n", strings.Join(item.Schedule, " "), item.Command)
     }
     return nil
+}
+
+func friendlyList(field string) string {
+    parts := strings.Split(field, ",")
+    if len(parts) == 1 {
+        return parts[0]
+    }
+
+    if len(parts) == 2 {
+        return parts[0] + " and " + parts[1]
+    }
+
+    return strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
+}
+
+func describePart(label, field string) string {
+    if field == "*" {
+        if label == "minute" {
+            return "every minute"
+        }
+        if label == "hour" {
+            return " every hour"
+        }
+        return ""
+    }
+
+    // Step: */5 or 1-10/2
+    if strings.Contains(field, "/") {
+        parts := strings.Split(field, "/")
+        base, step := parts[0], parts[1]
+
+        if base == "*" {
+            return fmt.Sprintf(" every %s %ss", step, label)
+        }
+        return fmt.Sprintf(" every %s %ss between %s", step, label, describeRange(base))
+    }
+
+    // Range: 1-5
+    if strings.Contains(field, "-") {
+        return fmt.Sprintf(" at each %s from %s", label, describeRange(field))
+    }
+
+    // List: 5,25,45
+    if strings.Contains(field, ",") {
+        return fmt.Sprintf(" at %s %ss", friendlyList(field), label)
+    }
+
+    // Single value
+    return fmt.Sprintf(" at %s %s", field, label)
+}
+
+func describeRange(r string) string {
+    parts := strings.Split(r, "-")
+    if len(parts) != 2 {
+        return r
+    }
+    return fmt.Sprintf("%s to %s", parts[0], parts[1])
+}
+
+func describeTime(hour, minute string) string {
+    if hour == "*" && minute == "*" {
+        return ""
+    }
+
+    if hour == "*" && minute != "*" {
+        return fmt.Sprintf("every hour at :%s", minute)
+    }
+
+    if hour != "*" && minute == "*" {
+        return fmt.Sprintf("every minute during %s", formatHour(hour))
+    }
+
+    // both fixed → HH:MM
+    if hour != "*" && minute != "*" {
+        return "at " + formatTime(hour, minute)
+    }
+
+    return ""
+}
+
+func formatTime(hour, minute string) string {
+    h, _ := strconv.Atoi(hour)
+    m, _ := strconv.Atoi(minute)
+
+    suffix := "AM"
+    if h == 0 {
+        h = 12
+    } else if h == 12 {
+        suffix = "PM"
+    } else if h > 12 {
+        h -= 12
+        suffix = "PM"
+    }
+
+    return fmt.Sprintf("%d:%02d %s", h, m, suffix)
+}
+
+func formatHour(hour string) string {
+    return formatTime(hour, "00")
+}
+
+
+var monthNames = map[string]string{
+    "1": "January", "2": "February", "3": "March", "4": "April",
+    "5": "May", "6": "June", "7": "July", "8": "August",
+    "9": "September", "10": "October", "11": "November", "12": "December",
+}
+
+var weekdayNames = map[string]string{
+    "0": "Sunday", "7": "Sunday",
+    "1": "Monday", "2": "Tuesday", "3": "Wednesday",
+    "4": "Thursday", "5": "Friday", "6": "Saturday",
+}
+
+func describeMonthList(field string) string {
+    parts := strings.Split(field, ",")
+
+    var names []string
+    for _, p := range parts {
+        if name, ok := monthNames[p]; ok {
+            names = append(names, name)
+        } else {
+            names = append(names, p)
+        }
+    }
+
+    return friendlyList(strings.Join(names, ","))
+}
+
+func describeWeekdayList(field string) string {
+    parts := strings.Split(field, ",")
+
+    var names []string
+    for _, p := range parts {
+        if name, ok := weekdayNames[p]; ok {
+            names = append(names, name)
+        } else {
+            names = append(names, p)
+        }
+    }
+
+    return friendlyList(strings.Join(names, ","))
+}
+
+func describeOrdinalList(field string) string {
+    parts := strings.Split(field, ",")
+
+    var list []string
+    for _, p := range parts {
+        list = append(list, ordinal(p))
+    }
+
+    return friendlyList(strings.Join(list, ","))
+}
+
+func ordinal(s string) string {
+    n, err := strconv.Atoi(s)
+    if err != nil {
+        return s
+    }
+    if n%10 == 1 && n%100 != 11 {
+        return fmt.Sprintf("%dst", n)
+    }
+    if n%10 == 2 && n%100 != 12 {
+        return fmt.Sprintf("%dnd", n)
+    }
+    if n%10 == 3 && n%100 != 13 {
+        return fmt.Sprintf("%drd", n)
+    }
+    return fmt.Sprintf("%dth", n)
 }
