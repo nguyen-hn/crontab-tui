@@ -18,8 +18,8 @@ func NewCrontabListPanel() (*CrontabListPanel, error) {
         viewPosition: ViewPosition{
             x0: Position{0.0, 0},
             y0: Position{0.0, 0},
-            x1: Position{0.9, 1},
-            y1: Position{0.5, 1},
+            x1: Position{1.0, 1},
+            y1: Position{0.75, 1},
         },
         CrontabList: nil,
     }

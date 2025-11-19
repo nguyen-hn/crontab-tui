@@ -16,9 +16,9 @@ func NewDescriptionPanel() (*DescriptionPanel, error) {
         ViewName: "description",
         viewPosition: ViewPosition{
             x0: Position{0.0, 0},
-            y0: Position{0.5, 0},
-            x1: Position{0.9, 1},
-            y1: Position{0.9, 1},
+            y0: Position{0.8, 0},
+            x1: Position{1.0, 1},
+            y1: Position{0.9, 0},
         },
     }
     return &descriptionPanel, nil
